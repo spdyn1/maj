@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- adresse du site de l'appli, avec la barre finale : à redéfinir dans res/values de l'appli -->
+    <string name="maj_site" translatable="false"></string>
+</resources>

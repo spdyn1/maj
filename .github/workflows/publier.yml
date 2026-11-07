@@ -1,0 +1,122 @@
+# Workflow partagé de publication (appelé par Cairn, Bascules, puis Carnet).
+# Compile, signe, dépose APK + version.json sur le site spdyn1.github.io (avis de mise à jour du module maj),
+# puis crée la release GitHub vX.Y du dépôt appelant.
+# Secrets attendus chez l'appelant (secrets: inherit) : CARNET_KEYSTORE_B64, CARNET_KS_PASS, SITE_DEPLOY_KEY
+# (clé SSH de déploiement en écriture sur spdyn1/spdyn1.github.io).
+name: Publier (partagé)
+
+on:
+  workflow_call:
+    inputs:
+      notes:
+        description: Notes de version
+        required: true
+        type: string
+      taches:
+        description: Tâches Gradle
+        default: assembleRelease
+        type: string
+      apks:
+        description: "Une ligne par APK : NOM DOSSIER chemin/vers.apk"
+        required: true
+        type: string
+
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Version
+        id: v
+        run: |
+          code=$(sed -n 's/^ *versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)
+          version=$(sed -n 's/^ *versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
+          [ -n "$code" ] && [ -n "$version" ] || { echo "::error::versionCode/versionName introuvables"; exit 1; }
+          echo "code=$code" >> "$GITHUB_OUTPUT"; echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Site et garde-fou de version
+        env:
+          CLE_SITE: ${{ secrets.SITE_DEPLOY_KEY }}
+          APKS: ${{ inputs.apks }}
+        run: |
+          [ -n "$CLE_SITE" ] || { echo "::error::Secret SITE_DEPLOY_KEY absent"; exit 1; }
+          mkdir -p ~/.ssh; echo "$CLE_SITE" > ~/.ssh/site; chmod 600 ~/.ssh/site
+          ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+          echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/site -o IdentitiesOnly=yes" >> "$GITHUB_ENV"
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/site -o IdentitiesOnly=yes"
+          git clone -q --depth 1 git@github.com:spdyn1/spdyn1.github.io.git "$RUNNER_TEMP/site"
+          while read -r nom dossier chemin; do
+            [ -n "$nom" ] || continue
+            f="$RUNNER_TEMP/site/$dossier/version.json"
+            [ -f "$f" ] || continue
+            ancien=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["versionCode"])' "$f")
+            if [ "${{ steps.v.outputs.code }}" -le "$ancien" ]; then
+              echo "::error::$nom : versionCode ${{ steps.v.outputs.code }} ≤ $ancien déjà publié — monter la version"; exit 1
+            fi
+          done <<< "$APKS"
+
+      - name: Clé de signature
+        env:
+          CLE: ${{ secrets.CARNET_KEYSTORE_B64 }}
+        run: |
+          [ -n "$CLE" ] || { echo "::error::Secret CARNET_KEYSTORE_B64 absent"; exit 1; }
+          echo "$CLE" | base64 -d > "$RUNNER_TEMP/carnet.keystore"
+          echo "CARNET_KEYSTORE=$RUNNER_TEMP/carnet.keystore" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Compilation
+        env:
+          CARNET_KS_PASS: ${{ secrets.CARNET_KS_PASS }}
+        run: |
+          sed -i '/^org.gradle.java.home=/d' gradle.properties   # JDK du T14
+          sdkmanager=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" "platforms;android-37.0" "build-tools;37.0.0" > /dev/null
+          ./gradlew --no-daemon ${{ inputs.taches }}
+
+      - name: Dépôt sur le site
+        env:
+          APKS: ${{ inputs.apks }}
+          NOTES: ${{ inputs.notes }}
+          CODE: ${{ steps.v.outputs.code }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          S="$RUNNER_TEMP/site"; mkdir -p "$RUNNER_TEMP/rel"; titre=""
+          while read -r nom dossier chemin; do
+            [ -n "$nom" ] || continue
+            mkdir -p "$S/$dossier"
+            cp "$chemin" "$S/$dossier/$nom.apk"
+            sha=$(sha256sum "$chemin" | cut -d' ' -f1)
+            python3 -c 'import json,sys; print(json.dumps({"versionCode": int(sys.argv[1]), "versionName": sys.argv[2], "notes": sys.argv[3], "apk": sys.argv[4], "sha256": sys.argv[5]}, ensure_ascii=False))' \
+              "$CODE" "$VERSION" "$NOTES" "$nom.apk" "$sha" > "$S/$dossier/version.json"
+            [ -f "$S/$dossier/index.html" ] && sed -i "s|<span id=\"version\">.*</span>|<span id=\"version\">$VERSION</span>|" "$S/$dossier/index.html"
+            cp "$chemin" "$RUNNER_TEMP/rel/$dossier-$VERSION.apk"
+            git -C "$S" add "$dossier"
+            titre="${titre:+$titre + }$nom"
+          done <<< "$APKS"
+          echo "TITRE=$titre" >> "$GITHUB_ENV"
+          git -C "$S" -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "$titre $VERSION"
+          for essai in 1 2 3 4 5; do
+            git -C "$S" push -q && exit 0
+            sleep $((essai * 5)); git -C "$S" pull -q --rebase
+          done
+          echo "::error::push du site impossible"; exit 1
+
+      - name: Release GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ inputs.notes }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          gh release create "v$VERSION" "$RUNNER_TEMP"/rel/*.apk --target "$GITHUB_SHA" -t "$TITRE $VERSION" -n "$NOTES"
+          echo "### $TITRE $VERSION publié (versionCode ${{ steps.v.outputs.code }})" >> "$GITHUB_STEP_SUMMARY"
