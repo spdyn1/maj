@@ -40,6 +40,8 @@ object MiseAJour {
 
     private val principal = Handler(Looper.getMainLooper())
     @Volatile private var enCours = false
+    /** bouton « Rechercher » touché pendant une vérification automatique : relancé à la fin de celle-ci (fil principal) */
+    private var enAttente: ((Boolean?) -> Unit)? = null
 
     private fun site(c: Context) = c.getString(R.string.maj_site).also { require(it.endsWith("/")) { "maj_site non défini" } }
     private fun prefs(c: Context) = c.getSharedPreferences("maj", Context.MODE_PRIVATE)
@@ -57,7 +59,7 @@ object MiseAJour {
         val app = context.applicationContext
         reprendre(app)
         if (etat != Etat.Pret) { resultat?.let { r -> principal.post { r(disponible != null) } }; return }
-        if (enCours) return
+        if (enCours) { if (resultat != null) enAttente = resultat; return }
         val p = prefs(app)
         val maintenant = System.currentTimeMillis()
         if (resultat != null) p.edit().remove("ecartee").apply()
@@ -79,7 +81,10 @@ object MiseAJour {
             } catch (_: Exception) {
                 // hors ligne : on réessaiera au prochain retour
                 resultat?.let { r -> principal.post { r(null) } }
-            } finally { enCours = false }
+            } finally {
+                // sur le fil principal, comme les appels : une demande ne peut pas se glisser entre la fin et la relance
+                principal.post { enCours = false; enAttente?.let { r -> enAttente = null; verifier(app, resultat = r) } }
+            }
         }.start()
     }
 
