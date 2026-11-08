@@ -10,7 +10,8 @@ Intégration :
 3. `res/values` de l'appli : `<string name="maj_site" translatable="false">https://spdyn1.github.io/<appli>/</string>`.
 4. L'appli affiche elle-même l'avis : `MiseAJour.verifier(ctx)` (bouton « Rechercher une mise à jour » :
    `verifier(ctx, resultat = { r -> … })`, r = true nouvelle / false à jour / null échec), `disponible`, `etat`, `ecouteur`,
-   `mettreAJour(ctx)`, `ecarter(ctx)`. Permissions et FileProvider viennent du manifeste du module.
+   `mettreAJour(ctx)`, `ecarter(ctx)`. APK de l'appli reçu par VIEW/SEND : `installerRecu(ctx, flux)` (hors fil principal ;
+   null = installeur ouvert, sinon message). Permissions et FileProvider viennent du manifeste du module.
 
 ## Publication par CI
 

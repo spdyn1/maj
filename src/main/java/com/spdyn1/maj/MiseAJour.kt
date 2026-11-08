@@ -46,6 +46,8 @@ object MiseAJour {
     private fun site(c: Context) = c.getString(R.string.maj_site).also { require(it.endsWith("/")) { "maj_site non défini" } }
     private fun prefs(c: Context) = c.getSharedPreferences("maj", Context.MODE_PRIVATE)
     private fun fichier(c: Context) = File(File(c.cacheDir, "maj"), "maj.apk")
+    /** APK reçu d'une autre appli ([installerRecu]) : à part, pour que [verifier] ne l'efface pas pendant l'installation */
+    private fun recu(c: Context) = File(File(c.cacheDir, "maj"), "recu.apk")
     private fun installee(c: Context) = c.packageManager.getPackageInfo(c.packageName, 0).longVersionCode
 
     private fun changer(d: Info? = disponible, e: Etat = etat) = principal.post { disponible = d; etat = e; ecouteur?.invoke() }
@@ -76,7 +78,10 @@ object MiseAJour {
                 p.edit().putLong("vu", maintenant).apply()
                 val nouvelle = info.code > installee(app) && info.code > p.getLong("ecartee", 0)
                 if (nouvelle) changer(d = info)
-                else { changer(d = null); File(app.cacheDir, "maj").deleteRecursively() }
+                else {
+                    changer(d = null); fichier(app).delete()
+                    recu(app).takeIf { maintenant - it.lastModified() > 3600_000L }?.delete()
+                }
                 resultat?.let { r -> principal.post { r(nouvelle) } }
             } catch (_: Exception) {
                 // hors ligne : on réessaiera au prochain retour
@@ -122,17 +127,45 @@ object MiseAJour {
 
     /** au retour dans l'appli : si l'on vient d'autoriser l'installation, on continue */
     private fun reprendre(context: Context) {
-        if (etat == Etat.Autorisation && context.packageManager.canRequestPackageInstalls()) principal.post { installer(context) }
+        if (etat == Etat.Autorisation && context.packageManager.canRequestPackageInstalls()) principal.post { installer(context, aReprendre ?: fichier(context)) }
     }
 
-    private fun installer(context: Context) {
+    /** APK en attente de l'autorisation d'installer (téléchargé ou reçu) */
+    private var aReprendre: File? = null
+
+    /**
+     * APK ouvert ou partagé vers l'appli (ex. touché dans pCloud, qui ne sait pas l'installer lui-même) : si c'est une
+     * version plus récente de cette appli, l'installeur d'Android s'ouvre. Renvoie null dans ce cas, sinon le message à
+     * afficher. Lit le fichier : à appeler hors du fil principal.
+     */
+    fun installerRecu(context: Context, source: java.io.InputStream): String? {
+        val app = context.applicationContext
+        val f = recu(app)
+        f.parentFile!!.mkdirs()
+        source.use { e -> f.outputStream().use { e.copyTo(it) } }
+        val pm = app.packageManager
+        val pi = pm.getPackageArchiveInfo(f.path, 0)
+        val nom = app.applicationInfo.loadLabel(pm)
+        val refus = when {
+            pi == null -> "Ce fichier n'est pas une application lisible."
+            pi.packageName != app.packageName -> "Ce fichier n'est pas une version de $nom."
+            pi.longVersionCode <= installee(app) -> "Cette version de $nom (${pi.versionName}) n'est pas plus récente que celle installée."
+            else -> null
+        }
+        if (refus != null) { f.delete(); return refus }
+        principal.post { installer(app, f) }
+        return null
+    }
+
+    private fun installer(context: Context, f: File = fichier(context)) {
         if (!context.packageManager.canRequestPackageInstalls()) {
+            aReprendre = f
             changer(e = Etat.Autorisation)
             context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             return
         }
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.maj", fichier(context))
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.maj", f)
         changer(e = Etat.Installation)
         // installeur dans sa propre tâche (sinon son bouton « Ouvrir » ramène la tâche arrêtée par la mise à jour) ;
         // INSTALL_PACKAGE et non VIEW, pour aller droit à l'installeur
