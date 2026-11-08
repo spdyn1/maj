@@ -67,7 +67,7 @@ jobs:
           echo "$CLE" | base64 -d > "$RUNNER_TEMP/carnet.keystore"
           echo "CARNET_KEYSTORE=$RUNNER_TEMP/carnet.keystore" >> "$GITHUB_ENV"
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
