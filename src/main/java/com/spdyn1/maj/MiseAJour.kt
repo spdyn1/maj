@@ -113,14 +113,14 @@ object MiseAJour {
                     telecharger(info.apk, f)
                     if (!intact(f, info.sha256)) {
                         f.delete()
-                        changer(e = Etat.Erreur("Le fichier reçu n'est pas le bon (le site vient peut-être d'être mis à jour). Réessaie dans quelques minutes."))
+                        changer(e = Etat.Erreur(app.getString(R.string.maj_err_wrong_file)))
                         return@Thread
                     }
                 }
                 principal.post { installer(app) }
             } catch (_: Exception) {
                 f.delete()
-                changer(e = Etat.Erreur("Téléchargement impossible. Vérifie la connexion Internet et réessaie."))
+                changer(e = Etat.Erreur(app.getString(R.string.maj_err_download)))
             }
         }.start()
     }
@@ -147,9 +147,9 @@ object MiseAJour {
         val pi = pm.getPackageArchiveInfo(f.path, 0)
         val nom = app.applicationInfo.loadLabel(pm)
         val refus = when {
-            pi == null -> "Ce fichier n'est pas une application lisible."
-            pi.packageName != app.packageName -> "Ce fichier n'est pas une version de $nom."
-            pi.longVersionCode <= installee(app) -> "Cette version de $nom (${pi.versionName}) n'est pas plus récente que celle installée."
+            pi == null -> app.getString(R.string.maj_err_unreadable)
+            pi.packageName != app.packageName -> app.getString(R.string.maj_err_other_app, nom)
+            pi.longVersionCode <= installee(app) -> app.getString(R.string.maj_err_not_newer, nom, pi.versionName)
             else -> null
         }
         if (refus != null) { f.delete(); return refus }

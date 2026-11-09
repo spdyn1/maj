@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="maj_err_wrong_file">Le fichier reçu n\'est pas le bon (le site vient peut-être d\'être mis à jour). Réessaie dans quelques minutes.</string>
+    <string name="maj_err_download">Téléchargement impossible. Vérifie la connexion Internet et réessaie.</string>
+    <string name="maj_err_unreadable">Ce fichier n\'est pas une application lisible.</string>
+    <string name="maj_err_other_app">Ce fichier n\'est pas une version de %1$s.</string>
+    <string name="maj_err_not_newer">Cette version de %1$s (%2$s) n\'est pas plus récente que celle installée.</string>
+</resources>

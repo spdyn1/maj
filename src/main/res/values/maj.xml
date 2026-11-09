@@ -2,4 +2,9 @@
 <resources>
     <!-- adresse du site de l'appli, avec la barre finale : à redéfinir dans res/values de l'appli -->
     <string name="maj_site" translatable="false"></string>
+    <string name="maj_err_wrong_file">The downloaded file is not the right one (the site may have just been updated). Try again in a few minutes.</string>
+    <string name="maj_err_download">Download failed. Check your Internet connection and try again.</string>
+    <string name="maj_err_unreadable">This file is not a readable app.</string>
+    <string name="maj_err_other_app">This file is not a version of %1$s.</string>
+    <string name="maj_err_not_newer">This version of %1$s (%2$s) is not newer than the one installed.</string>
 </resources>
