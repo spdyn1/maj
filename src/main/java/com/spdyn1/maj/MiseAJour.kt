@@ -43,7 +43,7 @@ object MiseAJour {
     /** bouton « Rechercher » touché pendant une vérification automatique : relancé à la fin de celle-ci (fil principal) */
     private var enAttente: ((Boolean?) -> Unit)? = null
 
-    private fun site(c: Context) = c.getString(R.string.maj_site).also { require(it.endsWith("/")) { "maj_site non défini" } }
+    private fun site(c: Context) = c.getString(R.string.maj_site).also { require(it.endsWith("/")) { "maj_site not set" } }
     private fun prefs(c: Context) = c.getSharedPreferences("maj", Context.MODE_PRIVATE)
     private fun fichier(c: Context) = File(File(c.cacheDir, "maj"), "maj.apk")
     /** APK reçu d'une autre appli ([installerRecu]) : à part, pour que [verifier] ne l'efface pas pendant l'installation */
