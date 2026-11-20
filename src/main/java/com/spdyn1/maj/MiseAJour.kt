@@ -113,7 +113,8 @@ object MiseAJour {
                     telecharger(info.apk, f)
                     if (!intact(f, info.sha256)) {
                         f.delete()
-                        changer(e = Etat.Erreur(app.getString(R.string.maj_err_wrong_file)))
+                        // avis périmé (une version plus récente a remplacé l'APK annoncé) : on relit le site
+                        principal.post { etat = Etat.Pret; ecouteur?.invoke(); verifier(app, force = true) }
                         return@Thread
                     }
                 }
