@@ -1,7 +1,8 @@
 # Workflow partagé de publication (appelé par Cairn, Bascules, puis Carnet).
 # Compile, signe, dépose APK + version.json sur le site spdyn1.github.io (avis de mise à jour du module maj),
 # puis crée la release GitHub vX.Y du dépôt appelant.
-# Secrets attendus chez l'appelant (secrets: inherit) : CARNET_KEYSTORE_B64, CARNET_KS_PASS, SITE_DEPLOY_KEY
+# Secrets attendus, passés un à un par l'appelant (secrets: inherit ne traverse pas deux propriétaires,
+# or les appelants sont dans l'organisation spdyn1-atelier et ce dépôt chez spdyn1) : CARNET_KEYSTORE_B64, CARNET_KS_PASS, SITE_DEPLOY_KEY
 # (clé SSH de déploiement en écriture sur spdyn1/spdyn1.github.io).
 name: Publier (partagé)
 
@@ -20,6 +21,13 @@ on:
         description: "Une ligne par APK : NOM DOSSIER chemin/vers.apk"
         required: true
         type: string
+    secrets:
+      CARNET_KEYSTORE_B64:
+        required: true
+      CARNET_KS_PASS:
+        required: true
+      SITE_DEPLOY_KEY:
+        required: true
 
 jobs:
   publier:
