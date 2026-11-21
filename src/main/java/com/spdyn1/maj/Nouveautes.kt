@@ -10,7 +10,7 @@ import java.net.URL
 
 /**
  * « Nouveautés » partagées par les applis : l'historique des versions publiées.
- * Le site de l'appli publie <site>nouveautes.json = [{"versionCode", "versionName", "date" (AAAA-MM-JJ), "notes"}, …], la plus récente d'abord
+ * Le site de l'appli publie <site>nouveautes.json = [{"versionCode", "versionName", "date" (AAAA-MM-JJ), "notes", "notes_en" (facultatif)}, …], la plus récente d'abord
  * (ajouté à chaque publication par le workflow partagé). [lues] rend la dernière copie gardée (utilisable hors ligne) ;
  * [charger] la rafraîchit depuis le site. [nonVu] / [marquerVu] : la version installée a-t-elle déjà été montrée à l'utilisateur ?
  */
@@ -24,7 +24,7 @@ object Nouveautes {
     private fun lire(json: String): List<Entree> = runCatching {
         val a = JSONArray(json)
         (0 until a.length()).map { val o: JSONObject = a.getJSONObject(it)
-            Entree(o.getLong("versionCode"), o.optString("versionName"), o.optString("date"), o.optString("notes")) }
+            Entree(o.getLong("versionCode"), o.optString("versionName"), o.optString("date"), Notes.choisir(o)) }
     }.getOrDefault(emptyList())
 
     /** la dernière copie reçue du site (vide si jamais reçue) */

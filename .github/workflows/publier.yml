@@ -13,6 +13,11 @@ on:
         description: Notes de version
         required: true
         type: string
+      notes_en:
+        description: Notes de version en anglais (facultatif ; sinon les notes françaises servent à tous)
+        required: false
+        default: ""
+        type: string
       taches:
         description: Tâches Gradle
         default: assembleRelease
@@ -96,6 +101,7 @@ jobs:
         env:
           APKS: ${{ inputs.apks }}
           NOTES: ${{ inputs.notes }}
+          NOTES_EN: ${{ inputs.notes_en }}
           CODE: ${{ steps.v.outputs.code }}
           VERSION: ${{ steps.v.outputs.version }}
         run: |
@@ -105,10 +111,10 @@ jobs:
             mkdir -p "$S/$dossier"
             cp "$chemin" "$S/$dossier/$nom.apk"
             sha=$(sha256sum "$chemin" | cut -d' ' -f1)
-            python3 -c 'import json,sys; print(json.dumps({"versionCode": int(sys.argv[1]), "versionName": sys.argv[2], "notes": sys.argv[3], "apk": sys.argv[4], "sha256": sys.argv[5]}, ensure_ascii=False))' \
+            python3 -c 'import json,sys,os; print(json.dumps({"versionCode": int(sys.argv[1]), "versionName": sys.argv[2], "notes": sys.argv[3], **({"notes_en": os.environ["NOTES_EN"]} if os.environ.get("NOTES_EN") else {}), "apk": sys.argv[4], "sha256": sys.argv[5]}, ensure_ascii=False))' \
               "$CODE" "$VERSION" "$NOTES" "$nom.apk" "$sha" > "$S/$dossier/version.json"
             # historique des versions (page « Nouveautés » des applis) : la plus récente d'abord, 30 au plus
-            python3 -c 'import json,sys,os,datetime; f,code,ver,notes=sys.argv[1],int(sys.argv[2]),sys.argv[3],sys.argv[4]; h=json.load(open(f)) if os.path.exists(f) else []; h=[e for e in h if e.get("versionCode")!=code]; h.insert(0,{"versionCode":code,"versionName":ver,"date":datetime.date.today().isoformat(),"notes":notes}); json.dump(h[:30],open(f,"w"),ensure_ascii=False,indent=1)' "$S/$dossier/nouveautes.json" "$CODE" "$VERSION" "$NOTES"
+            python3 -c 'import json,sys,os,datetime; f,code,ver,notes=sys.argv[1],int(sys.argv[2]),sys.argv[3],sys.argv[4]; h=json.load(open(f)) if os.path.exists(f) else []; h=[e for e in h if e.get("versionCode")!=code]; h.insert(0,{"versionCode":code,"versionName":ver,"date":datetime.date.today().isoformat(),"notes":notes,**({"notes_en":os.environ["NOTES_EN"]} if os.environ.get("NOTES_EN") else {})}); json.dump(h[:30],open(f,"w"),ensure_ascii=False,indent=1)' "$S/$dossier/nouveautes.json" "$CODE" "$VERSION" "$NOTES"
             [ -f "$S/$dossier/index.html" ] && sed -i "s|<span id=\"version\">.*</span>|<span id=\"version\">$VERSION</span>|" "$S/$dossier/index.html"
             cp "$chemin" "$RUNNER_TEMP/rel/$dossier-$VERSION.apk"
             git -C "$S" add "$dossier"

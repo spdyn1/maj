@@ -73,7 +73,7 @@ object MiseAJour {
                 val c = URL(site + "version.json").openConnection() as HttpURLConnection
                 c.connectTimeout = 10_000; c.readTimeout = 10_000; c.useCaches = false
                 val o = c.inputStream.use { JSONObject(it.reader().readText()) }
-                val info = Info(o.getLong("versionCode"), o.optString("versionName"), o.optString("notes"),
+                val info = Info(o.getLong("versionCode"), o.optString("versionName"), Notes.choisir(o),
                     URL(URL(site), o.optString("apk", "maj.apk")).toString(), o.optString("sha256").ifBlank { null }?.lowercase())
                 p.edit().putLong("vu", maintenant).apply()
                 val nouvelle = info.code > installee(app) && info.code > p.getLong("ecartee", 0)
