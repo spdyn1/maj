@@ -22,6 +22,14 @@ on:
         description: Tâches Gradle
         default: assembleRelease
         type: string
+      module:
+        description: Dossier du module dont le build.gradle.kts porte la version
+        default: app
+        type: string
+      prefixe_tag:
+        description: Début de l'étiquette de la release (à changer pour une 2e appli du même dépôt)
+        default: v
+        type: string
       apks:
         description: "Une ligne par APK : NOM DOSSIER chemin/vers.apk"
         required: true
@@ -45,9 +53,11 @@ jobs:
 
       - name: Version
         id: v
+        env:
+          GRADLE: ${{ inputs.module }}/build.gradle.kts
         run: |
-          code=$(sed -n 's/^ *versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)
-          version=$(sed -n 's/^ *versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
+          code=$(sed -n 's/^ *versionCode = \([0-9]*\).*/\1/p' "$GRADLE")
+          version=$(sed -n 's/^ *versionName = "\(.*\)".*/\1/p' "$GRADLE")
           [ -n "$code" ] && [ -n "$version" ] || { echo "::error::versionCode/versionName introuvables"; exit 1; }
           echo "code=$code" >> "$GITHUB_OUTPUT"; echo "version=$version" >> "$GITHUB_OUTPUT"
 
@@ -133,6 +143,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ inputs.notes }}
           VERSION: ${{ steps.v.outputs.version }}
+          PREFIXE: ${{ inputs.prefixe_tag }}
         run: |
-          gh release create "v$VERSION" "$RUNNER_TEMP"/rel/*.apk --target "$GITHUB_SHA" -t "$TITRE $VERSION" -n "$NOTES"
+          gh release create "$PREFIXE$VERSION" "$RUNNER_TEMP"/rel/*.apk --target "$GITHUB_SHA" -t "$TITRE $VERSION" -n "$NOTES"
           echo "### $TITRE $VERSION publié (versionCode ${{ steps.v.outputs.code }})" >> "$GITHUB_STEP_SUMMARY"
